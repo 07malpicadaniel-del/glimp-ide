@@ -18,7 +18,12 @@ contextBridge.exposeInMainWorld('api', {
   ai: {
     analizarErrorTerminal: (errorText: string, apiKey: string) => ipcRenderer.invoke('analyze-terminal-error', errorText, apiKey),
     chatArquitecto: (prompt: string, apiKey: string) => ipcRenderer.invoke('chat-arquitecto', prompt, apiKey),
-    // Añadimos el nuevo canal para el código inline
     generarCodigoInline: (prompt: string, codigoActual: string, apiKey: string) => ipcRenderer.invoke('generar-codigo-inline', prompt, codigoActual, apiKey)
+  },
+
+  // --- NUEVO: PUENTE DE SEGURIDAD ---
+  security: {
+    saveApiKey: (key: string) => ipcRenderer.invoke('save-api-key', key),
+    getApiKey: () => ipcRenderer.invoke('get-api-key')
   }
-})
+}) // <-- Cierre del exposeInMainWorld

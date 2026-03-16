@@ -3,6 +3,7 @@ import { join } from 'path'
 import * as fs from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { iniciarBoveda } from './security'
 
 // Importamos nuestros módulos de Glimp
 import { iniciarDemonioObservador } from './watcher'
@@ -84,6 +85,7 @@ app.whenReady().then(() => {
   // --- Encender los motores en segundo plano ---
   iniciarDemonioObservador('.');
   iniciarAgentesIA(); // <-- NUEVO: Despierta a Gemini
+  iniciarBoveda(); // <-- NUEVO: Encendemos la seguridad
 
   createWindow()
 

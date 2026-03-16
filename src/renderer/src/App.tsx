@@ -23,16 +23,22 @@ function App() {
   const [inlineInput, setInlineInput] = useState("");
   const [inlineCargando, setInlineCargando] = useState(false);
 
-  // --- NUEVOS ESTADOS: Vista Diff (Rojo/Verde) ---
+  // --- Estados: Vista Diff (Rojo/Verde) ---
   const [modoDiff, setModoDiff] = useState(false);
   const [codigoPropuesto, setCodigoPropuesto] = useState("");
 
   useEffect(() => {
-    setInputApiKey(localStorage.getItem('glimp_apikey') || "");
-    // @ts-ignore
-    if (window.api && window.api.readDir) {
-      // @ts-ignore
-      window.api.readDir('.').then((res: FileNode[]) => setArchivos(res)).catch(err => console.error(err));
+    const api = (window as any).api;
+    
+    // NUEVO: Al iniciar, leemos la llave cifrada desde la bóveda de Windows/Mac
+    if (api && api.security) {
+        api.security.getApiKey().then((key: string | null) => {
+            if (key) setInputApiKey(key);
+        });
+    }
+
+    if (api && api.readDir) {
+      api.readDir('.').then((res: FileNode[]) => setArchivos(res)).catch(err => console.error(err));
     }
   }, []);
 
@@ -40,8 +46,8 @@ function App() {
       if (archivo.isDirectory) return;
       if (tabsAbiertos.find(t => t.path === archivo.path)) { setTabActivo(archivo.path); return; }
       try {
-          // @ts-ignore
-          const contenido = await window.api.readFile(archivo.path);
+          const api = (window as any).api;
+          const contenido = await api.readFile(archivo.path);
           setTabsAbiertos([...tabsAbiertos, { path: archivo.path, name: archivo.name, content: contenido }]);
           setTabActivo(archivo.path);
       } catch (error) { console.error("Error al abrir archivo:", error); }
@@ -64,14 +70,17 @@ function App() {
   const ejecutarAgenteOperario = async () => {
       if (!inlineInput.trim()) return;
       
-      const apiKey = localStorage.getItem('glimp_apikey');
+      const api = (window as any).api;
+      
+      // NUEVO: Obtenemos la llave cifrada desde el backend
+      const apiKey = await api.security.getApiKey();
+      
       if (!apiKey) { alert("Configura tu API Key en la barra superior primero."); return; }
 
       setInlineCargando(true);
       
       try {
-          // @ts-ignore
-          const nuevoCodigo = await window.api.ai.generarCodigoInline(inlineInput, contenidoActivo, apiKey);
+          const nuevoCodigo = await api.ai.generarCodigoInline(inlineInput, contenidoActivo, apiKey);
           setCodigoPropuesto(nuevoCodigo);
           setModoDiff(true); // Encendemos la pantalla comparativa
       } catch (e) {
@@ -86,8 +95,16 @@ function App() {
   const contenidoActivo = tabsAbiertos.find(t => t.path === tabActivo)?.content || "// Selecciona un archivo...";
   const lenguajeActivo = tabActivo ? (tabActivo.endsWith('.json') ? 'json' : 'typescript') : 'typescript';
 
-  const guardarApiKey = () => {
-      localStorage.setItem('glimp_apikey', inputApiKey.trim());
+  // NUEVO: Guardamos la llave usando la API cifrada nativa
+  const guardarApiKey = async () => {
+      const api = (window as any).api;
+      const guardado = await api.security.saveApiKey(inputApiKey.trim());
+      
+      if (guardado) {
+          alert("✅ Llave guardada y cifrada nativamente en tu sistema operativo.");
+      } else {
+          alert("❌ Error al cifrar la llave.");
+      }
       setMostrarModalApi(false);
   };
 
@@ -99,7 +116,7 @@ function App() {
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(2px)' }}>
           <div style={{ backgroundColor: '#252526', padding: '25px', borderRadius: '8px', border: '1px solid #444', width: '400px', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
              <h3 style={{ color: '#e3a828', marginTop: 0, fontFamily: 'sans-serif', fontSize: '16px' }}>🔑 Configuración de IA (BYOK)</h3>
-             <p style={{ color: '#ccc', fontSize: '13px', fontFamily: 'sans-serif', marginBottom: '20px' }}>Glimp IDE utiliza Google Gemini para analizar tus errores y generar código. Tu clave se guardará localmente.</p>
+             <p style={{ color: '#ccc', fontSize: '13px', fontFamily: 'sans-serif', marginBottom: '20px' }}>Glimp IDE utiliza Google Gemini para analizar tus errores y generar código. Tu clave se guardará cifrada localmente.</p>
              <input type="password" value={inputApiKey} onChange={(e) => setInputApiKey(e.target.value)} style={{ width: '100%', padding: '10px', backgroundColor: '#1e1e1e', color: '#fff', border: '1px solid #007acc', borderRadius: '4px', marginBottom: '20px', boxSizing: 'border-box', outline: 'none', fontFamily: 'monospace' }} />
              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                 <button onClick={() => setMostrarModalApi(false)} style={{ backgroundColor: 'transparent', color: '#ccc', border: '1px solid #444', cursor: 'pointer', padding: '6px 15px', borderRadius: '4px' }}>Cancelar</button>
@@ -148,7 +165,6 @@ function App() {
                         <div style={{ display: 'flex', gap: '10px' }}>
                             <button onClick={() => setModoDiff(false)} style={{ backgroundColor: '#da3633', color: 'white', border: 'none', padding: '6px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>✖ Rechazar</button>
                             <button onClick={() => {
-                                // Guardamos el nuevo código en la pestaña activa
                                 const nuevosTabs = tabsAbiertos.map(t => t.path === tabActivo ? { ...t, content: codigoPropuesto } : t);
                                 setTabsAbiertos(nuevosTabs);
                                 setModoDiff(false);

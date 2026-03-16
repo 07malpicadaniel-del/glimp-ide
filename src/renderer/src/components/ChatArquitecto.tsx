@@ -9,7 +9,11 @@ export default function ChatArquitecto() {
 
   const enviarMensajeChat = async () => {
       if (!inputChat.trim() || chatCargando) return;
-      const apiKey = localStorage.getItem('glimp_apikey');
+      
+      // NUEVO: Pedimos la llave a la bóveda
+      const api = (window as any).api;
+      const apiKey = await api.security.getApiKey();
+      
       if (!apiKey) { alert("Configura tu API Key en la barra superior primero."); return; }
 
       const pregunta = inputChat;
@@ -18,8 +22,7 @@ export default function ChatArquitecto() {
       setChatCargando(true);
 
       try {
-          // @ts-ignore
-          const respuesta = await window.api.ai.chatArquitecto(pregunta, apiKey);
+          const respuesta = await api.ai.chatArquitecto(pregunta, apiKey);
           setMensajesChat(prev => [...prev, { rol: 'ia', texto: respuesta }]);
       } catch (e) {
           setMensajesChat(prev => [...prev, { rol: 'ia', texto: "❌ Error de conexión." }]);

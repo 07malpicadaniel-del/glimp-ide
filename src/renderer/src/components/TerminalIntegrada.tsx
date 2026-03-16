@@ -11,13 +11,15 @@ export default function TerminalIntegrada() {
 
   const analizarConIA = async () => {
       if (!errorTerminal) return;
-      const apiKey = localStorage.getItem('glimp_apikey');
+      // NUEVO: Pedimos la llave a la bóveda
+      const api = (window as any).api;
+      const apiKey = await api.security.getApiKey();
+      
       if (!apiKey) { setRespuestaIA("⚠️ Acceso denegado: Necesitas configurar tu API Key de Gemini."); return; }
       
       setRespuestaIA("Escaneando el contexto del error... 🧠");
       try {
-          // @ts-ignore
-          const respuesta = await window.api.ai.analizarErrorTerminal(errorTerminal, apiKey);
+          const respuesta = await api.ai.analizarErrorTerminal(errorTerminal, apiKey);
           setRespuestaIA(respuesta);
       } catch (e) { setRespuestaIA("Fallo de conexión con Gemini."); }
   };
