@@ -16,14 +16,41 @@ contextBridge.exposeInMainWorld('api', {
 
   // --- PUENTE DE IA ---
   ai: {
-    analizarErrorTerminal: (errorText: string, apiKey: string) => ipcRenderer.invoke('analyze-terminal-error', errorText, apiKey),
-    chatArquitecto: (prompt: string, apiKey: string) => ipcRenderer.invoke('chat-arquitecto', prompt, apiKey),
-    generarCodigoInline: (prompt: string, codigoActual: string, apiKey: string) => ipcRenderer.invoke('generar-codigo-inline', prompt, codigoActual, apiKey)
+    analizarErrorTerminal: (errorText: string, apiKey: string, modelo: string) => ipcRenderer.invoke('analyze-terminal-error', errorText, apiKey, modelo),
+    chatArquitecto: (prompt: string, apiKey: string, modelo: string) => ipcRenderer.invoke('chat-arquitecto', prompt, apiKey, modelo),
+    generarCodigoInline: (prompt: string, codigoActual: string, apiKey: string, modelo: string) => ipcRenderer.invoke('generar-codigo-inline', prompt, codigoActual, apiKey, modelo),
+    
+    // --- NUEVO: Puente de Streaming para el Chat ---
+    streamChatArquitecto: (prompt: string, apiKey: string, modelo: string, callbacks: { onChunk: (text: string) => void, onEnd: () => void, onError: (err: string) => void }) => {
+        // Creamos un ID único para este mensaje
+        const channelId = `chat-stream-${Date.now()}`;
+        
+        // Escuchamos los pedazos
+        ipcRenderer.on(`${channelId}-chunk`, (_, chunkText) => callbacks.onChunk(chunkText));
+        
+        // Escuchamos el final
+        ipcRenderer.once(`${channelId}-end`, () => {
+            ipcRenderer.removeAllListeners(`${channelId}-chunk`); // Limpiamos la memoria
+            callbacks.onEnd();
+        });
+        
+        // Escuchamos si hay error
+        ipcRenderer.once(`${channelId}-error`, (_, errText) => {
+            ipcRenderer.removeAllListeners(`${channelId}-chunk`);
+            callbacks.onError(errText);
+        });
+
+        // Enviamos la petición al backend
+        ipcRenderer.send('chat-arquitecto-stream', { channelId, promptUsuario: prompt, apiKey, modeloSeleccionado: modelo });
+    }
   },
 
-  // --- NUEVO: PUENTE DE SEGURIDAD ---
+  // --- PUENTE DE SEGURIDAD ---
   security: {
     saveApiKey: (key: string) => ipcRenderer.invoke('save-api-key', key),
     getApiKey: () => ipcRenderer.invoke('get-api-key')
-  }
-}) // <-- Cierre del exposeInMainWorld
+  },
+
+  // --- NUEVO: PUENTE DE WORKSPACES ---
+  openFolderDialog: () => ipcRenderer.invoke('open-folder-dialog')
+})

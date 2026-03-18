@@ -1,11 +1,39 @@
-body, html {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  width: 100%;
-  overflow: hidden; /* Evita barras de scroll externas */
+@import './base.css';
+
+:root {
+  /* Tu paleta de identidad */
+  --frozen-water: #d7f9f1ff;
+  --muted-teal: #7aa095ff;
+  --olive-leaf: #40531bff;
+  --fern: #618b4aff;
+  --dry-sage: #afbc88ff;
+
+  /* Colores estructurales del IDE (derivados para el Modo Oscuro) */
+  --bg-main: #121510;       /* Negro con un ligerísimo tinte verde */
+  --bg-sidebar: #181c15;    /* Gris muy oscuro para paneles */
+  --border-color: #2a3320;  /* Bordes sutiles olivas */
 }
 
-* {
-  box-sizing: border-box;
+body {
+  margin: 0;
+  background-color: var(--bg-main);
+  color: var(--frozen-water);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  overflow: hidden;
+}
+
+/* Scrollbar personalizada con tu paleta */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--olive-leaf);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fern);
 }

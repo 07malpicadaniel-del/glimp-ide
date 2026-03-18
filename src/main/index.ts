@@ -1,14 +1,13 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron' // <-- IMPORTAMOS DIALOG
 import { join } from 'path'
 import * as fs from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { iniciarBoveda } from './security'
 
-// Importamos nuestros módulos de Glimp
 import { iniciarDemonioObservador } from './watcher'
 import { iniciarTerminal } from './terminal'
-import { iniciarAgentesIA } from './aiController' // <-- NUEVO: Controlador de IA
+import { iniciarAgentesIA } from './aiController' 
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -38,11 +37,9 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // --- INICIO CÓDIGO GLIMP: Terminal ---
   mainWindow.webContents.on('did-finish-load', () => {
     iniciarTerminal(mainWindow.webContents);
   });
-  // --- FIN CÓDIGO GLIMP ---
 }
 
 app.whenReady().then(() => {
@@ -54,7 +51,6 @@ app.whenReady().then(() => {
 
   ipcMain.on('ping', () => console.log('pong'))
 
-  // --- INICIO CÓDIGO GLIMP: Lector de Directorios y Archivos ---
   ipcMain.handle('read-dir', async (_, dirPath) => {
     try {
       const dirents = fs.readdirSync(dirPath, { withFileTypes: true })
@@ -80,12 +76,32 @@ app.whenReady().then(() => {
       throw error
     }
   })
+
+  // --- INICIO CÓDIGO GLIMP: Selector de Workspaces ---
+  ipcMain.handle('open-folder-dialog', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      properties: ['openDirectory'] 
+    });
+    
+    if (canceled || filePaths.length === 0) {
+      return null; 
+    }
+    
+    const selectedPath = filePaths[0];
+    console.log("📁 Nuevo Workspace seleccionado:", selectedPath);
+    
+    const windows = BrowserWindow.getAllWindows();
+    if (windows.length > 0) {
+        iniciarTerminal(windows[0].webContents, selectedPath);
+    }
+
+    return selectedPath;
+  });
   // --- FIN CÓDIGO GLIMP ---
 
-  // --- Encender los motores en segundo plano ---
   iniciarDemonioObservador('.');
-  iniciarAgentesIA(); // <-- NUEVO: Despierta a Gemini
-  iniciarBoveda(); // <-- NUEVO: Encendemos la seguridad
+  iniciarAgentesIA(); 
+  iniciarBoveda(); 
 
   createWindow()
 

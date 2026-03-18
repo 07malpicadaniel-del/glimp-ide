@@ -11,15 +11,15 @@ export default function TerminalIntegrada() {
 
   const analizarConIA = async () => {
       if (!errorTerminal) return;
-      // NUEVO: Pedimos la llave a la bóveda
       const api = (window as any).api;
       const apiKey = await api.security.getApiKey();
+      if (!apiKey) { setRespuestaIA("⚠️ Acceso denegado: Necesitas configurar tu API Key."); return; }
       
-      if (!apiKey) { setRespuestaIA("⚠️ Acceso denegado: Necesitas configurar tu API Key de Gemini."); return; }
-      
+      // LÓGICA ACTUALIZADA EN TerminalIntegrada.tsx
       setRespuestaIA("Escaneando el contexto del error... 🧠");
       try {
-          const respuesta = await api.ai.analizarErrorTerminal(errorTerminal, apiKey);
+          const modeloActivo = localStorage.getItem('glimp_model') || 'gemini-2.5-flash';
+          const respuesta = await api.ai.analizarErrorTerminal(errorTerminal, apiKey, modeloActivo);
           setRespuestaIA(respuesta);
       } catch (e) { setRespuestaIA("Fallo de conexión con Gemini."); }
   };
@@ -27,7 +27,17 @@ export default function TerminalIntegrada() {
   useEffect(() => {
     if (!terminalRef.current) return;
 
-    const term = new Terminal({ theme: { background: '#1e1e1e', foreground: '#cccccc', cursor: '#e3a828' }, fontFamily: 'Consolas, "Courier New", monospace', fontSize: 13, cursorBlink: true });
+    // APLICAMOS TU PALETA AL MOTOR DE LA TERMINAL
+    const term = new Terminal({ 
+        theme: { 
+            background: '#121510',      /* var(--bg-main) */
+            foreground: '#d7f9f1',      /* var(--frozen-water) */
+            cursor: '#afbc88',          /* var(--dry-sage) */
+            selectionBackground: '#40531b' /* var(--olive-leaf) */
+        }, 
+        fontFamily: 'Consolas, "Courier New", monospace', fontSize: 13, cursorBlink: true 
+    });
+    
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(terminalRef.current);
@@ -47,7 +57,7 @@ export default function TerminalIntegrada() {
       if (bufferTerminal.current.length > 2000) bufferTerminal.current = bufferTerminal.current.slice(-2000);
       const cleanData = data.replace(/\x1b\[[0-9;]*m/g, '').toLowerCase();
       
-      if (cleanData.includes('error') || cleanData.includes('err!') || cleanData.includes('exception') || cleanData.includes('not recognized') || cleanData.includes('no se reconoce')) {
+      if (cleanData.includes('error') || cleanData.includes('err!') || cleanData.includes('exception')) {
          setErrorTerminal(bufferTerminal.current);
       }
     });
@@ -58,19 +68,19 @@ export default function TerminalIntegrada() {
   }, []);
 
   return (
-    <div style={{ height: '300px', borderTop: '1px solid #333', backgroundColor: '#1e1e1e', padding: '10px', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-       <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#888', marginBottom: '5px', fontFamily: 'sans-serif', display: 'flex', justifyContent: 'space-between' }}>
+    <div style={{ height: '300px', borderTop: '1px solid var(--border-color)', backgroundColor: 'var(--bg-main)', padding: '10px', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+       <div style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--muted-teal)', marginBottom: '5px', fontFamily: 'sans-serif', display: 'flex', justifyContent: 'space-between' }}>
           <span>TERMINAL INTEGRADA</span>
           {errorTerminal && !respuestaIA && <button onClick={analizarConIA} style={{ backgroundColor: '#da3633', color: 'white', border: 'none', padding: '3px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>🤖 Explicar Error con IA</button>}
        </div>
 
        {respuestaIA && (
-           <div style={{ position: 'absolute', top: '35px', right: '20px', width: '450px', maxHeight: '240px', overflowY: 'auto', backgroundColor: '#252526', border: '1px solid #e3a828', borderRadius: '6px', padding: '15px', zIndex: 10, boxShadow: '0 4px 15px rgba(0,0,0,0.5)' }}>
-               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', borderBottom: '1px solid #333', paddingBottom: '5px' }}>
-                  <strong style={{ color: '#e3a828', fontSize: '12px' }}>⚡ Glimp Solucionador</strong>
-                  <span onClick={() => { setRespuestaIA(null); }} style={{ cursor: 'pointer', color: '#888' }}>✖ Cerrar</span>
+           <div style={{ position: 'absolute', top: '35px', right: '20px', width: '450px', maxHeight: '240px', overflowY: 'auto', backgroundColor: 'var(--bg-sidebar)', border: '1px solid var(--fern)', borderRadius: '6px', padding: '15px', zIndex: 10, boxShadow: '0 4px 15px rgba(0,0,0,0.8)' }}>
+               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', borderBottom: '1px solid var(--border-color)', paddingBottom: '5px' }}>
+                  <strong style={{ color: 'var(--frozen-water)', fontSize: '12px' }}>⚡ Glimp Solucionador</strong>
+                  <span onClick={() => { setRespuestaIA(null); }} style={{ cursor: 'pointer', color: 'var(--muted-teal)' }}>✖ Cerrar</span>
                </div>
-               <div style={{ fontSize: '13px', lineHeight: '1.5', color: '#ccc', whiteSpace: 'pre-wrap' }}>{respuestaIA}</div>
+               <div style={{ fontSize: '13px', lineHeight: '1.5', color: 'var(--dry-sage)', whiteSpace: 'pre-wrap' }}>{respuestaIA}</div>
            </div>
        )}
        <div style={{ flexGrow: 1, width: '100%', position: 'relative', overflow: 'hidden' }}>
