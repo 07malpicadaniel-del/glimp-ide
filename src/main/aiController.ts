@@ -106,3 +106,42 @@ INSTRUCCIONES ESTRICTAS:
         }
     });
 }
+// --- NUEVO: Tech Lead (Planificador de Código) ---
+    ipcMain.handle('planear-codigo-inline', async (_, promptUsuario, codigoActual, apiKey, modeloSeleccionado) => {
+        try {
+            if (!apiKey) throw new Error("No has configurado tu API Key.");
+            const genAI = new GoogleGenerativeAI(apiKey);
+            
+            // Usamos el modelo que el usuario configuró como Tech Lead
+            const model = genAI.getGenerativeModel({ model: modeloSeleccionado || "gemini-3.1-pro-preview" });
+
+            const promptTechLead = `
+Eres el Tech Lead de un proyecto de software. 
+El desarrollador te pide implementar esto: "${promptUsuario}"
+
+Aquí está el código actual del archivo:
+${codigoActual ? codigoActual : "(El archivo está vacío)"}
+
+Tu tarea es analizar la petición y crear un plan de acción paso a paso para el Junior Coder que escribirá el código.
+DEVUELVE ÚNICAMENTE UN JSON VÁLIDO con la siguiente estructura exacta. No incluyas markdown, saludos ni explicaciones fuera del JSON.
+
+{
+  "descripcion": "Breve resumen de la estrategia general (1 o 2 oraciones)",
+  "pasos": [
+    "Paso 1: ...",
+    "Paso 2: ..."
+  ]
+}
+`;
+            const result = await model.generateContent(promptTechLead);
+            let texto = result.response.text();
+            
+            // Limpieza robusta para garantizar que sea parseable a JSON
+            texto = texto.replace(/^```json\n/i, '').replace(/^```\n/i, '').replace(/\n```$/i, '').trim();
+            
+            return JSON.parse(texto);
+        } catch (error: any) {
+            console.error("Error en el Planificador Tech Lead:", error);
+            throw error;
+        }
+    });
