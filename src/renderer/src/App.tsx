@@ -4,6 +4,7 @@ import './assets/main.css';
 
 import ChatArquitecto from './components/ChatArquitecto';
 import TerminalIntegrada from './components/TerminalIntegrada';
+import ModalPlaneacion from './components/ModalPlaneacion';
 
 interface FileNode { name: string; isDirectory: boolean; path: string; }
 interface Tab { path: string; name: string; content: string; }
@@ -14,25 +15,31 @@ function App() {
   const [tabsAbiertos, setTabsAbiertos] = useState<Tab[]>([]);
   const [tabActivo, setTabActivo] = useState<string | null>(null);
 
+  // --- ESTADOS: Bóveda de Seguridad ---
   const [mostrarModalApi, setMostrarModalApi] = useState(false);
   const [inputApiKey, setInputApiKey] = useState("");
 
+  // --- ESTADOS: Panel de Ajustes Avanzados ---
   const [mostrarModalAjustes, setMostrarModalAjustes] = useState(false);
   const [techLeadModel, setTechLeadModel] = useState(localStorage.getItem('glimp_tech_lead') || 'gemini-3.1-pro-preview');
   const [juniorModel, setJuniorModel] = useState(localStorage.getItem('glimp_junior') || 'gemini-2.5-flash');
   const [iaTemperatura, setIaTemperatura] = useState(Number(localStorage.getItem('glimp_temp') || 0.7));
   const [requiereRevision, setRequiereRevision] = useState(localStorage.getItem('glimp_revision') !== 'false');
 
-  // --- NUEVO ESTADO: Telemetría del RAG ---
+  // --- ESTADOS: Telemetría del RAG ---
   const [indexProgress, setIndexProgress] = useState<{current: number, total: number, file: string, status: string} | null>(null);
 
+  // --- ESTADOS: Orquestación Multi-Agente (Ctrl+K) ---
   const editorRef = useRef<any>(null);
   const [mostrarInlinePrompt, setMostrarInlinePrompt] = useState(false);
   const [inlineInput, setInlineInput] = useState("");
   const [inlineCargando, setInlineCargando] = useState(false);
-
   const [modoDiff, setModoDiff] = useState(false);
   const [codigoPropuesto, setCodigoPropuesto] = useState("");
+  
+  const [planActual, setPlanActual] = useState<{descripcion: string, pasos: string[]} | null>(null);
+  const [mostrarModalPlaneacion, setMostrarModalPlaneacion] = useState(false);
+  const [cargandoJunior, setCargandoJunior] = useState(false);
 
   useEffect(() => {
     const api = (window as any).api;
@@ -40,11 +47,9 @@ function App() {
         api.security.getApiKey().then((key: string | null) => { if (key) setInputApiKey(key); });
     }
     
-    // Conectamos el oído a la Telemetría del backend
     if (api && api.onIndexProgress) {
         api.onIndexProgress((data: any) => {
             setIndexProgress(data);
-            // Si termina, limpiamos el estado después de 4 segundos
             if (data.current === data.total) {
                 setTimeout(() => setIndexProgress(null), 4000);
             }
@@ -94,6 +99,7 @@ function App() {
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => setMostrarInlinePrompt(true));
   };
 
+  // --- FASE 1 DEL COMPOSITOR: El Tech Lead genera el Plan ---
   const ejecutarAgenteOperario = async () => {
       if (!inlineInput.trim()) return;
       const api = (window as any).api;
@@ -102,12 +108,48 @@ function App() {
 
       setInlineCargando(true);
       try {
-          const modeloActivo = localStorage.getItem('glimp_junior') || 'gemini-2.5-flash';
-          const nuevoCodigo = await api.ai.generarCodigoInline(inlineInput, contenidoActivo, apiKey, modeloActivo);
+          const modeloTechLead = localStorage.getItem('glimp_tech_lead') || 'gemini-3.1-pro-preview';
+          const planJSON = await api.ai.planearCodigoInline(inlineInput, contenidoActivo, apiKey, modeloTechLead);
+          
+          setPlanActual(planJSON);
+          setMostrarModalPlaneacion(true); 
+      } catch (e) { 
+          alert("Error al planear el código con el Tech Lead. Revisa la consola."); 
+          console.error(e);
+      } finally { 
+          setInlineCargando(false); 
+      }
+  };
+
+  // --- FASE 2 DEL COMPOSITOR: El Junior ejecuta el Plan Aprobado ---
+  const ejecutarPlanAprobado = async () => {
+      const api = (window as any).api;
+      const apiKey = await api.security.getApiKey();
+      
+      setCargandoJunior(true);
+      try {
+          const modeloJunior = localStorage.getItem('glimp_junior') || 'gemini-2.5-flash';
+          const promptCombinado = `Petición original: "${inlineInput}"\nSigue estrictamente este plan estructurado por el Tech Lead:\n${JSON.stringify(planActual?.pasos, null, 2)}`;
+          
+          const nuevoCodigo = await api.ai.generarCodigoInline(promptCombinado, contenidoActivo, apiKey, modeloJunior);
           setCodigoPropuesto(nuevoCodigo);
-          setModoDiff(true); 
-      } catch (e) { alert("Error al generar código."); } 
-      finally { setInlineCargando(false); setMostrarInlinePrompt(false); setInlineInput(""); }
+          
+          setMostrarModalPlaneacion(false);
+          setInlineInput("");
+          
+          if (requiereRevision) {
+              setModoDiff(true); 
+          } else {
+              const nuevosTabs = tabsAbiertos.map(t => t.path === tabActivo ? { ...t, content: nuevoCodigo } : t);
+              setTabsAbiertos(nuevosTabs);
+              setModoDiff(false);
+          }
+      } catch (e) {
+          alert("Error en la ejecución del Junior Coder.");
+          console.error(e);
+      } finally {
+          setCargandoJunior(false);
+      }
   };
 
   const contenidoActivo = tabsAbiertos.find(t => t.path === tabActivo)?.content || "// Selecciona o crea un archivo...";
@@ -176,10 +218,6 @@ function App() {
                     <span style={{ color: 'var(--frozen-water)', backgroundColor: 'var(--bg-main)', padding: '2px 8px', borderRadius: '4px' }}>{iaTemperatura.toFixed(1)}</span>
                  </label>
                  <input type="range" min="0" max="1" step="0.1" value={iaTemperatura} onChange={(e) => setIaTemperatura(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--fern)', cursor: 'pointer' }} />
-                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--muted-teal)', marginTop: '4px' }}>
-                     <span>Exacto (0.0)</span>
-                     <span>Creativo (1.0)</span>
-                 </div>
              </div>
 
              <div style={{ marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: 'var(--bg-main)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
@@ -197,6 +235,18 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* NUEVO: MODAL DE PLANEACIÓN TECH LEAD */}
+      <ModalPlaneacion 
+          isOpen={mostrarModalPlaneacion}
+          plan={planActual}
+          cargandoEjecucion={cargandoJunior}
+          onRechazar={() => {
+              setMostrarModalPlaneacion(false);
+              setPlanActual(null);
+          }}
+          onAceptar={ejecutarPlanAprobado}
+      />
 
       <div style={{ padding: '10px 20px', backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
@@ -260,7 +310,7 @@ function App() {
                         <div style={{ position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', width: '500px', backgroundColor: 'var(--bg-sidebar)', border: '1px solid var(--fern)', borderRadius: '8px', padding: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.8)', zIndex: 50, display: 'flex', gap: '10px', alignItems: 'center' }}>
                             <span style={{ fontSize: '16px' }}>✨</span>
                             <input type="text" autoFocus value={inlineInput} onChange={(e) => setInlineInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') ejecutarAgenteOperario(); if (e.key === 'Escape') setMostrarInlinePrompt(false); }} placeholder="Describe la función y el Tech Lead armará el plan..." style={{ flexGrow: 1, backgroundColor: 'transparent', border: 'none', color: 'var(--frozen-water)', fontSize: '13px', outline: 'none', fontFamily: 'sans-serif' }} disabled={inlineCargando} />
-                            {inlineCargando && <span style={{ color: 'var(--dry-sage)', fontSize: '12px', fontWeight: 'bold' }}>Pensando...</span>}
+                            {inlineCargando && <span style={{ color: 'var(--dry-sage)', fontSize: '12px', fontWeight: 'bold' }}>El Tech Lead está planeando... 🧠</span>}
                         </div>
                     )}
                 </>
