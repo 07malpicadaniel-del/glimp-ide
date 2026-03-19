@@ -1,6 +1,16 @@
 import * as chokidar from 'chokidar';
 import { diseccionarCodigo } from './ast-extractor';
 import { indexarFragmentos } from './vectorDb';
+import { BrowserWindow } from 'electron';
+
+// Función para transmitir el estado del RAG al Frontend
+export function notificarProgresoRAG(current: number, total: number, file: string, status: string = 'Indexando') {
+    const windows = BrowserWindow.getAllWindows();
+    if (windows.length > 0) {
+        // Enviamos el pedacito de información a la ventana principal
+        windows[0].webContents.send('index-progress', { current, total, file, status });
+    }
+}
 
 export function iniciarDemonioObservador(rutaDirectorio: string) {
     console.log(`\n👁️ [Demonio] Iniciando vigilancia en: ${rutaDirectorio}`);

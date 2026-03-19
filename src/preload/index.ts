@@ -51,6 +51,12 @@ contextBridge.exposeInMainWorld('api', {
     getApiKey: () => ipcRenderer.invoke('get-api-key')
   },
 
-  // --- NUEVO: PUENTE DE WORKSPACES ---
-  openFolderDialog: () => ipcRenderer.invoke('open-folder-dialog')
+  // --- PUENTE DE WORKSPACES ---
+  openFolderDialog: () => ipcRenderer.invoke('open-folder-dialog'),
+
+  // --- NUEVO: PUENTE DE TELEMETRÍA RAG ---
+  onIndexProgress: (callback: (data: { current: number, total: number, file: string, status: string }) => void) => {
+      // Usamos ipcRenderer.on para escuchar un flujo constante de datos, no solo una respuesta
+      ipcRenderer.on('index-progress', (_, data) => callback(data));
+  }
 })

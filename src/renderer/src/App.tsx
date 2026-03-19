@@ -17,8 +17,14 @@ function App() {
   const [mostrarModalApi, setMostrarModalApi] = useState(false);
   const [inputApiKey, setInputApiKey] = useState("");
 
-  // --- ESTADO: Modelo activo (Por defecto usamos 2.5 Flash) ---
-  const [modeloIA, setModeloIA] = useState(localStorage.getItem('glimp_model') || 'gemini-2.5-flash');
+  const [mostrarModalAjustes, setMostrarModalAjustes] = useState(false);
+  const [techLeadModel, setTechLeadModel] = useState(localStorage.getItem('glimp_tech_lead') || 'gemini-3.1-pro-preview');
+  const [juniorModel, setJuniorModel] = useState(localStorage.getItem('glimp_junior') || 'gemini-2.5-flash');
+  const [iaTemperatura, setIaTemperatura] = useState(Number(localStorage.getItem('glimp_temp') || 0.7));
+  const [requiereRevision, setRequiereRevision] = useState(localStorage.getItem('glimp_revision') !== 'false');
+
+  // --- NUEVO ESTADO: Telemetría del RAG ---
+  const [indexProgress, setIndexProgress] = useState<{current: number, total: number, file: string, status: string} | null>(null);
 
   const editorRef = useRef<any>(null);
   const [mostrarInlinePrompt, setMostrarInlinePrompt] = useState(false);
@@ -33,6 +39,18 @@ function App() {
     if (api && api.security) {
         api.security.getApiKey().then((key: string | null) => { if (key) setInputApiKey(key); });
     }
+    
+    // Conectamos el oído a la Telemetría del backend
+    if (api && api.onIndexProgress) {
+        api.onIndexProgress((data: any) => {
+            setIndexProgress(data);
+            // Si termina, limpiamos el estado después de 4 segundos
+            if (data.current === data.total) {
+                setTimeout(() => setIndexProgress(null), 4000);
+            }
+        });
+    }
+
     cargarArchivos(rutaActual);
   }, [rutaActual]);
 
@@ -84,7 +102,7 @@ function App() {
 
       setInlineCargando(true);
       try {
-          const modeloActivo = localStorage.getItem('glimp_model') || 'gemini-2.5-flash';
+          const modeloActivo = localStorage.getItem('glimp_junior') || 'gemini-2.5-flash';
           const nuevoCodigo = await api.ai.generarCodigoInline(inlineInput, contenidoActivo, apiKey, modeloActivo);
           setCodigoPropuesto(nuevoCodigo);
           setModoDiff(true); 
@@ -98,14 +116,21 @@ function App() {
   const guardarApiKey = async () => {
       const api = (window as any).api;
       const guardado = await api.security.saveApiKey(inputApiKey.trim());
-      if (guardado) alert("✅ Llave cifrada correctamente.");
+      if (guardado) alert("✅ Llave cifrada nativamente en el OS.");
       setMostrarModalApi(false);
+  };
+
+  const guardarAjustesAvanzados = () => {
+      localStorage.setItem('glimp_tech_lead', techLeadModel);
+      localStorage.setItem('glimp_junior', juniorModel);
+      localStorage.setItem('glimp_temp', iaTemperatura.toString());
+      localStorage.setItem('glimp_revision', requiereRevision.toString());
+      setMostrarModalAjustes(false);
   };
 
   return (
     <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-main)', position: 'relative' }}>
       
-      {/* MODAL PERSONALIZADO DE API KEY */}
       {mostrarModalApi && (
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(3px)' }}>
           <div style={{ backgroundColor: 'var(--bg-sidebar)', padding: '25px', borderRadius: '8px', border: '1px solid var(--olive-leaf)', width: '400px', boxShadow: '0 10px 30px rgba(0,0,0,0.9)' }}>
@@ -120,53 +145,79 @@ function App() {
         </div>
       )}
 
-      {/* HEADER IDE CON SELECTOR DE MODELOS DE VANGUARDIA */}
+      {mostrarModalAjustes && (
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(3px)' }}>
+          <div style={{ backgroundColor: 'var(--bg-sidebar)', padding: '25px', borderRadius: '12px', border: '1px solid var(--fern)', width: '480px', boxShadow: '0 10px 40px rgba(0,0,0,0.9)' }}>
+             <h3 style={{ color: 'var(--frozen-water)', marginTop: 0, fontFamily: 'sans-serif', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                ⚙️ Orquestación Agéntica
+             </h3>
+             <p style={{ color: 'var(--muted-teal)', fontSize: '13px', fontFamily: 'sans-serif', marginBottom: '20px' }}>Configura el comportamiento del cerebro dual de Glimp IDE.</p>
+             
+             <div style={{ marginBottom: '15px' }}>
+                 <label style={{ display: 'block', color: 'var(--dry-sage)', fontSize: '12px', marginBottom: '5px', fontWeight: 'bold' }}>🧠 Tech Lead (Planificador Arquitectónico)</label>
+                 <select value={techLeadModel} onChange={(e) => setTechLeadModel(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: 'var(--bg-main)', color: 'var(--frozen-water)', border: '1px solid var(--border-color)', borderRadius: '6px', outline: 'none', fontSize: '13px', cursor: 'pointer' }}>
+                    <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview (Máximo Razonamiento)</option>
+                    <option value="gemini-3-pro-preview">Gemini 3.0 Pro Preview</option>
+                 </select>
+             </div>
+
+             <div style={{ marginBottom: '20px' }}>
+                 <label style={{ display: 'block', color: 'var(--dry-sage)', fontSize: '12px', marginBottom: '5px', fontWeight: 'bold' }}>⚡ Junior Coder (Ejecutor de Código)</label>
+                 <select value={juniorModel} onChange={(e) => setJuniorModel(e.target.value)} style={{ width: '100%', padding: '8px', backgroundColor: 'var(--bg-main)', color: 'var(--frozen-water)', border: '1px solid var(--border-color)', borderRadius: '6px', outline: 'none', fontSize: '13px', cursor: 'pointer' }}>
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Ultra Rápido)</option>
+                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                    <option value="gemma-3-27b-it">Gemma 3 27B (Local/Open)</option>
+                 </select>
+             </div>
+
+             <div style={{ marginBottom: '25px' }}>
+                 <label style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--dry-sage)', fontSize: '12px', marginBottom: '8px', fontWeight: 'bold' }}>
+                    <span>🌡️ Temperatura (Creatividad)</span>
+                    <span style={{ color: 'var(--frozen-water)', backgroundColor: 'var(--bg-main)', padding: '2px 8px', borderRadius: '4px' }}>{iaTemperatura.toFixed(1)}</span>
+                 </label>
+                 <input type="range" min="0" max="1" step="0.1" value={iaTemperatura} onChange={(e) => setIaTemperatura(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--fern)', cursor: 'pointer' }} />
+                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--muted-teal)', marginTop: '4px' }}>
+                     <span>Exacto (0.0)</span>
+                     <span>Creativo (1.0)</span>
+                 </div>
+             </div>
+
+             <div style={{ marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: 'var(--bg-main)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                 <input type="checkbox" id="revisionCheck" checked={requiereRevision} onChange={(e) => setRequiereRevision(e.target.checked)} style={{ accentColor: 'var(--fern)', transform: 'scale(1.2)', cursor: 'pointer' }} />
+                 <label htmlFor="revisionCheck" style={{ color: 'var(--frozen-water)', fontSize: '12px', cursor: 'pointer', lineHeight: '1.4' }}>
+                     <strong>Revisión Humana (Diff Editor)</strong><br/>
+                     <span style={{ color: 'var(--muted-teal)' }}>Si se desactiva, la IA aplicará cambios directamente al archivo.</span>
+                 </label>
+             </div>
+
+             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                <button onClick={() => setMostrarModalAjustes(false)} style={{ backgroundColor: 'transparent', color: 'var(--muted-teal)', border: '1px solid var(--border-color)', cursor: 'pointer', padding: '8px 16px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold' }}>Cancelar</button>
+                <button onClick={guardarAjustesAvanzados} style={{ backgroundColor: 'var(--fern)', color: '#fff', border: 'none', cursor: 'pointer', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px', boxShadow: '0 2px 10px rgba(97, 139, 74, 0.4)' }}>Guardar Ajustes</button>
+             </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ padding: '10px 20px', backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
             <span style={{ color: 'var(--frozen-water)', fontWeight: 'bold', fontFamily: 'sans-serif', fontSize: '15px' }}>🌿 Glimp IDE</span>
-            
-            <button onClick={abrirWorkspace} style={{ backgroundColor: 'var(--olive-leaf)', color: 'var(--frozen-water)', border: '1px solid var(--fern)', padding: '4px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', transition: 'all 0.2s' }}>
-                📁 Abrir Proyecto
+            <button onClick={abrirWorkspace} style={{ backgroundColor: 'var(--olive-leaf)', color: 'var(--frozen-water)', border: '1px solid var(--fern)', padding: '5px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '14px' }}>📁</span> Abrir Proyecto
             </button>
-            
-            {/* SELECTOR DE MODELOS MEJORADO */}
-            <select 
-                value={modeloIA} 
-                onChange={(e) => {
-                    const nuevoModelo = e.target.value;
-                    setModeloIA(nuevoModelo);
-                    localStorage.setItem('glimp_model', nuevoModelo);
-                }}
-                style={{ backgroundColor: 'var(--bg-sidebar)', color: 'var(--frozen-water)', border: '1px solid var(--border-color)', padding: '4px 10px', borderRadius: '4px', outline: 'none', cursor: 'pointer', fontSize: '12px', fontFamily: 'sans-serif', maxWidth: '250px' }}
-            >
-                <optgroup label="⚡ Velocidad & Estabilidad">
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                </optgroup>
-                <optgroup label="🧠 Razonamiento Avanzado">
-                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                </optgroup>
-                <optgroup label="🚀 Previews de Vanguardia (Glimp Pro)">
-                    <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
-                    <option value="gemini-3-pro-preview">Gemini 3.0 Pro Preview</option>
-                    <option value="deep-research-pro-preview-12-2025">Deep Research Pro (Dec 25)</option>
-                    <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite Preview</option>
-                </optgroup>
-                <optgroup label="💎 Modelos Abiertos (Gemma)">
-                    <option value="gemma-3-27b-it">Gemma 3 27B</option>
-                    <option value="gemma-3-12b-it">Gemma 3 12B</option>
-                </optgroup>
-            </select>
         </div>
         
-        <button onClick={() => setMostrarModalApi(true)} style={{ backgroundColor: 'transparent', color: 'var(--dry-sage)', border: '1px solid var(--border-color)', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
-            🔑 Bóveda
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+            <button onClick={() => setMostrarModalAjustes(true)} style={{ backgroundColor: 'var(--bg-sidebar)', color: 'var(--frozen-water)', border: '1px solid var(--border-color)', padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '14px' }}>⚙️</span> Ajustes de IA
+            </button>
+            <button onClick={() => setMostrarModalApi(true)} style={{ backgroundColor: 'var(--bg-sidebar)', color: 'var(--dry-sage)', border: '1px solid var(--border-color)', padding: '5px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '14px' }}>🔑</span> Bóveda
+            </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexGrow: 1, overflow: 'hidden' }}>
         
-        {/* SIDEBAR EXPLORADOR */}
         <div style={{ width: '250px', backgroundColor: 'var(--bg-sidebar)', borderRight: '1px solid var(--border-color)', overflowY: 'auto', padding: '15px 0', flexShrink: 0 }}>
           {archivos.map((a, i) => (
             <div key={i} onClick={() => abrirArchivo(a)} style={{ padding: '6px 15px', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', color: a.isDirectory ? 'var(--dry-sage)' : 'var(--muted-teal)', fontFamily: 'sans-serif' }}>
@@ -175,7 +226,6 @@ function App() {
           ))}
         </div>
 
-        {/* ZONA CENTRAL */}
         <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           
           <div style={{ display: 'flex', backgroundColor: 'var(--bg-main)', borderBottom: '1px solid var(--border-color)', overflowX: 'auto' }}>
@@ -190,7 +240,7 @@ function App() {
             {modoDiff ? (
                 <>
                     <div style={{ backgroundColor: 'var(--bg-sidebar)', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)' }}>
-                        <span style={{ color: 'var(--muted-teal)', fontSize: '13px', fontFamily: 'sans-serif' }}>Revisando cambios propuestos...</span>
+                        <span style={{ color: 'var(--muted-teal)', fontSize: '13px', fontFamily: 'sans-serif' }}>Revisando cambios propuestos por Junior Coder...</span>
                         <div style={{ display: 'flex', gap: '10px' }}>
                             <button onClick={() => setModoDiff(false)} style={{ backgroundColor: 'transparent', color: 'var(--frozen-water)', border: '1px solid #da3633', padding: '6px 15px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>✖ Rechazar</button>
                             <button onClick={() => {
@@ -209,8 +259,8 @@ function App() {
                     {mostrarInlinePrompt && (
                         <div style={{ position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', width: '500px', backgroundColor: 'var(--bg-sidebar)', border: '1px solid var(--fern)', borderRadius: '8px', padding: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.8)', zIndex: 50, display: 'flex', gap: '10px', alignItems: 'center' }}>
                             <span style={{ fontSize: '16px' }}>✨</span>
-                            <input type="text" autoFocus value={inlineInput} onChange={(e) => setInlineInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') ejecutarAgenteOperario(); if (e.key === 'Escape') setMostrarInlinePrompt(false); }} placeholder="Pídele a Gemini que edite o genere código..." style={{ flexGrow: 1, backgroundColor: 'transparent', border: 'none', color: 'var(--frozen-water)', fontSize: '13px', outline: 'none', fontFamily: 'sans-serif' }} disabled={inlineCargando} />
-                            {inlineCargando && <span style={{ color: 'var(--dry-sage)', fontSize: '12px', fontWeight: 'bold' }}>Codificando...</span>}
+                            <input type="text" autoFocus value={inlineInput} onChange={(e) => setInlineInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') ejecutarAgenteOperario(); if (e.key === 'Escape') setMostrarInlinePrompt(false); }} placeholder="Describe la función y el Tech Lead armará el plan..." style={{ flexGrow: 1, backgroundColor: 'transparent', border: 'none', color: 'var(--frozen-water)', fontSize: '13px', outline: 'none', fontFamily: 'sans-serif' }} disabled={inlineCargando} />
+                            {inlineCargando && <span style={{ color: 'var(--dry-sage)', fontSize: '12px', fontWeight: 'bold' }}>Pensando...</span>}
                         </div>
                     )}
                 </>
@@ -220,6 +270,17 @@ function App() {
         </div>
         <ChatArquitecto />
       </div>
+
+      {/* BARRA DE ESTADO (TELEMETRÍA RAG) */}
+      <div style={{ height: '24px', backgroundColor: 'var(--olive-leaf)', borderTop: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', padding: '0 15px', fontSize: '11px', color: 'var(--frozen-water)', gap: '15px', fontFamily: 'sans-serif' }}>
+          <span>🌿 Glimp RAG Status:</span>
+          {indexProgress ? (
+              <span>⏳ {indexProgress.status}... [{indexProgress.current}/{indexProgress.total}] archivos procesados ({indexProgress.file})</span>
+          ) : (
+              <span style={{ color: 'var(--dry-sage)' }}>✔️ Base de datos vectorial sincronizada</span>
+          )}
+      </div>
+
     </div>
   );
 }
